@@ -4,6 +4,11 @@ import torch
 import clip
 import io
 import os
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads/'
@@ -12,23 +17,18 @@ app.config['UPLOAD_FOLDER'] = 'uploads/'
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model, preprocess = clip.load("ViT-B/32", device)
 
+# Configurar Selenium con Edge
+options = webdriver.EdgeOptions()
+options.add_argument("--headless")  # Ejecutar en segundo plano (opcional)
+driver = webdriver.Edge(options=options)
+
 # Función para preprocesar y analizar la imagen
 def analyze_image(image):
     image_input = preprocess(image).unsqueeze(0).to(device)
     texts = [
-    "a apple", "a avocado", "a banana", "a carrot", "a broccoli", "a cucumber", "a tomato", "an onion", "a garlic", 
-    "a potato", "a spinach", "a kale", "a lettuce", "a cabbage", "an eggplant", "a zucchini", "a bell pepper", 
-    "a mushroom", "an asparagus", "a celery", "a cauliflower", "a sweet potato", "a green bean", "a pea", "a corn", 
-    "an artichoke", "a pumpkin", "a squash", "a beet", "a chard", "a radish", "a leek", "a parsnip", "a fennel", 
-    "a brussels sprout", "an okra", "a rhubarb", "a green onion", "a chive", "a basil", "a cilantro", "a parsley", 
-    "a mint", "a dill", "a oregano", "a thyme", "a sage", "a rosemary", "a tarragon", "a bay leaf", "a marjoram", 
-    "a lavender", "a paprika", "a cumin", "a turmeric", "a cinnamon", "a nutmeg", "a clove", "a ginger", "a cardamom", 
-    "a allspice", "a chili powder", "a cayenne pepper", "a black pepper", "a salt", "a soy sauce", "a honey", 
-    "a maple syrup", "a brown sugar", "a white sugar", "a molasses", "a agave nectar", "a coconut sugar", "a stevia", 
-    "a almond", "a walnut", "a cashew", "a peanut", "a hazelnut", "a pistachio", "a sunflower seed", "a pumpkin seed", 
-    "a chia seed", "a flax seed", "a sesame seed", "a quinoa", "a rice", "an oat", "a barley", "a wheat", "a spelt", 
-    "a rye", "a cornmeal", "a polenta", "a buckwheat", "a amaranth", "a millet", "a tofu", "a tempeh", "a chickpea","a other food"
-]
+        "an apple", "an avocado", "a banana", "a carrot", "a broccoli", "a cucumber", "a tomato", "an onion", "a garlic",
+        "a chickpea", "another food","a pizza"
+    ]
 
     text_inputs = torch.cat([clip.tokenize(text) for text in texts]).to(device)
 
@@ -43,6 +43,52 @@ def analyze_image(image):
     best_match = torch.argmax(similarity).item()
     return texts[best_match]
 
+# Obtener información nutricional desde Edamam
+def get_nutrition_info(predicted_class):
+    driver.get("https://developer.edamam.com/edamam-nutrition-api-demo")
+
+    # Esperar a que la página cargue completamente
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.ID, "demoAnalysis"))
+    )
+
+    # Encontrar el área de texto y escribir el alimento detectado
+    textarea = driver.find_element(By.ID, "demoAnalysis")
+    textarea.clear()
+    textarea.send_keys(predicted_class)
+
+    # Encontrar el botón y hacer clic con precaución
+    analyze_button = WebDriverWait(driver, 10).until(
+        EC.element_to_be_clickable((By.CLASS_NAME, "calc-analysis-api"))
+    )
+
+    # Asegurar que el botón sea visible y hacer clic
+    driver.execute_script("arguments[0].scrollIntoView();", analyze_button)
+    ActionChains(driver).move_to_element(analyze_button).click().perform()
+
+    # Esperar los resultados de la tabla
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.CLASS_NAME, "table"))
+    )
+
+    # Extraer los datos de la tabla
+    table = driver.find_element(By.CLASS_NAME, "table")
+    rows = table.find_elements(By.TAG_NAME, "tr")[1:]  # Omitir la cabecera
+
+    nutrition_data = []
+    for row in rows:
+        cols = row.find_elements(By.TAG_NAME, "th")
+        if len(cols) >= 5:
+            nutrition_data.append({
+                "Qty": cols[0].text,
+                "Unit": cols[1].text,
+                "Food": cols[2].text,
+                "Calories": cols[3].text,
+                "Weight": cols[4].text,
+            })
+
+    return nutrition_data
+
 @app.route("/predict", methods=["POST"])
 def predict():
     if "file" not in request.files:
@@ -56,9 +102,16 @@ def predict():
     image = Image.open(io.BytesIO(file.read()))
     
     # Procesar y analizar la imagen
-    prediction = analyze_image(image)
+    predicted_class = analyze_image(image)
+    
+    # Obtener información nutricional desde Edamam
+    nutrition_info = get_nutrition_info(predicted_class)
 
-    return jsonify({"predicted_class": prediction}), 200
+    # Regresar el resultado y la información
+    return jsonify({
+        "predicted_class": predicted_class,
+        "nutrition_info": nutrition_info
+    }), 200
 
 if __name__ == "__main__":
     app.run(debug=True)

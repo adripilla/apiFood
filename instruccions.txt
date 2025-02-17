@@ -3,3 +3,9 @@ pip install -r requirements.txt
  .\venv\Scripts\activate
 python .\app.py
 deactivate
+
+git add .
+git commit -m "Primer commit"
+git branch api_nutricional
+git checkout api_nutricionalgit branck
+git branch

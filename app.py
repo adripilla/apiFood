@@ -4,6 +4,8 @@ import torch
 import clip
 import io
 import os
+import requests
+import re
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -19,18 +21,24 @@ model, preprocess = clip.load("ViT-B/32", device)
 
 # Configurar Selenium con Edge
 options = webdriver.EdgeOptions()
-options.add_argument("--headless")  # Ejecutar en segundo plano (opcional)
+options.add_argument("--headless")  # Ejecutar en segundo plano
+
 driver = webdriver.Edge(options=options)
 
-# Función para preprocesar y analizar la imagen
+# Cargar alimentos desde un archivo de texto
+def cargar_alimentos(archivo="alimentos.txt"):
+    if not os.path.exists(archivo):
+        with open(archivo, "w", encoding="utf-8") as f:
+            f.write("apple\nbanana\ncarrot\nbroccoli\ncucumber\ntomato\nonion\ngarlic\n")
+    with open(archivo, "r", encoding="utf-8") as f:
+        return [f"a {line.strip()}" for line in f if line.strip()]
+
+# Leer alimentos desde el archivo
+alimentos = cargar_alimentos()
+
 def analyze_image(image):
     image_input = preprocess(image).unsqueeze(0).to(device)
-    texts = [
-        "an apple", "an avocado", "a banana", "a carrot", "a broccoli", "a cucumber", "a tomato", "an onion", "a garlic",
-        "a chickpea", "another food","a pizza"
-    ]
-
-    text_inputs = torch.cat([clip.tokenize(text) for text in texts]).to(device)
+    text_inputs = torch.cat([clip.tokenize(text) for text in alimentos]).to(device)
 
     with torch.no_grad():
         image_features = model.encode_image(image_input)
@@ -41,52 +49,31 @@ def analyze_image(image):
     similarity = (image_features @ text_features.T).squeeze(0)
 
     best_match = torch.argmax(similarity).item()
-    return texts[best_match]
+    return alimentos[best_match]
 
-# Obtener información nutricional desde Edamam
 def get_nutrition_info(predicted_class):
     driver.get("https://developer.edamam.com/edamam-nutrition-api-demo")
-
-    # Esperar a que la página cargue completamente
-    WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.ID, "demoAnalysis"))
-    )
-
-    # Encontrar el área de texto y escribir el alimento detectado
+    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "demoAnalysis")))
     textarea = driver.find_element(By.ID, "demoAnalysis")
     textarea.clear()
     textarea.send_keys(predicted_class)
-
-    # Encontrar el botón y hacer clic con precaución
-    analyze_button = WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable((By.CLASS_NAME, "calc-analysis-api"))
-    )
-
-    # Asegurar que el botón sea visible y hacer clic
+    
+    analyze_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CLASS_NAME, "calc-analysis-api")))
     driver.execute_script("arguments[0].scrollIntoView();", analyze_button)
     ActionChains(driver).move_to_element(analyze_button).click().perform()
-
-    # Esperar los resultados de la tabla
-    WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.CLASS_NAME, "table"))
-    )
-
-    # Extraer los datos de la tabla
+    
+    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "table")))
     table = driver.find_element(By.CLASS_NAME, "table")
-    rows = table.find_elements(By.TAG_NAME, "tr")[1:]  # Omitir la cabecera
-
-    nutrition_data = []
-    for row in rows:
-        cols = row.find_elements(By.TAG_NAME, "th")
-        if len(cols) >= 5:
-            nutrition_data.append({
-                "Qty": cols[0].text,
-                "Unit": cols[1].text,
-                "Food": cols[2].text,
-                "Calories": cols[3].text,
-                "Weight": cols[4].text,
-            })
-
+    rows = table.find_elements(By.TAG_NAME, "tr")[1:]
+    
+    nutrition_data = [{
+        "Qty": row.find_elements(By.TAG_NAME, "th")[0].text,
+        "Unit": row.find_elements(By.TAG_NAME, "th")[1].text,
+        "Food": row.find_elements(By.TAG_NAME, "th")[2].text,
+        "Calories": row.find_elements(By.TAG_NAME, "th")[3].text,
+        "Weight": row.find_elements(By.TAG_NAME, "th")[4].text
+    } for row in rows if len(row.find_elements(By.TAG_NAME, "th")) >= 5]
+    
     return nutrition_data
 
 @app.route("/predict", methods=["POST"])
@@ -97,21 +84,41 @@ def predict():
     file = request.files["file"]
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
-
-    # Leer la imagen enviada
+    
     image = Image.open(io.BytesIO(file.read()))
-    
-    # Procesar y analizar la imagen
     predicted_class = analyze_image(image)
+    print(predicted_class)
     
-    # Obtener información nutricional desde Edamam
+    search_query = re.sub(r'^(a|an)\s+', '', predicted_class, flags=re.IGNORECASE)
     nutrition_info = get_nutrition_info(predicted_class)
+    
+    print(nutrition_info)
+     
+    regex = re.compile(re.escape(search_query), re.IGNORECASE)
+    
+    # Obtener datos de la API mealdb_search_url con manejo de errores
+    mealdb_search_url = f"https://www.themealdb.com/api/json/v1/1/search.php?s={search_query}"
+    try:
+        search_response = requests.get(mealdb_search_url)
+        mealdb_search_data = search_response.json()
+        
+        if "meals" in mealdb_search_data:
+            filtered_search = [meal for meal in mealdb_search_data["meals"] if regex.search(meal.get("strMeal", ""))]
+        else:
+            filtered_search = "none"
+    except Exception as e:
+        mealdb_search_data = {"error": str(e)}
+        filtered_search = "none"
 
-    # Regresar el resultado y la información
+   
+
     return jsonify({
         "predicted_class": predicted_class,
-        "nutrition_info": nutrition_info
+        "nutrition_info": nutrition_info,
+        "mealdb_search": filtered_search
     }), 200
+
+
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -1,0 +1,8 @@
+apple
+banana
+carrot
+broccoli
+cucumber
+tomato
+onion
+garlic

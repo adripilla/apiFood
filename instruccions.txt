@@ -9,3 +9,7 @@ git commit -m "Primer commit"
 git branch api_nutricional
 git checkout api_nutricionalgit branck
 git branch
+
+
+click==8.1.8
+clip @ git+https://github.com/openai/CLIP.git@dcba3cb2e2827b402d2701e7e1c7d9fed8a20ef1

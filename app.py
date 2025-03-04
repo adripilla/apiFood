@@ -11,8 +11,10 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 app.config['UPLOAD_FOLDER'] = 'uploads/'
 
 # Cargar el modelo CLIP
@@ -21,7 +23,7 @@ model, preprocess = clip.load("ViT-B/32", device)
 
 # Configurar Selenium con Edge
 options = webdriver.EdgeOptions()
-options.add_argument("--headless")  # Ejecutar en segundo plano
+options.add_argument("--headless")
 
 driver = webdriver.Edge(options=options)
 
@@ -58,11 +60,11 @@ def get_nutrition_info(predicted_class):
     textarea.clear()
     textarea.send_keys(predicted_class)
     
-    analyze_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CLASS_NAME, "calc-analysis-api")))
+    analyze_button = WebDriverWait(driver, 50).until(EC.element_to_be_clickable((By.CLASS_NAME, "calc-analysis-api")))
     driver.execute_script("arguments[0].scrollIntoView();", analyze_button)
     ActionChains(driver).move_to_element(analyze_button).click().perform()
     
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "table")))
+    WebDriverWait(driver, 50).until(EC.presence_of_element_located((By.CLASS_NAME, "table")))
     table = driver.find_element(By.CLASS_NAME, "table")
     rows = table.find_elements(By.TAG_NAME, "tr")[1:]
     
@@ -76,8 +78,8 @@ def get_nutrition_info(predicted_class):
     
     return nutrition_data
 
-@app.route("/predict", methods=["POST"])
-def predict():
+@app.route("/analyze_image", methods=["POST"])
+def analyze_image_endpoint():
     if "file" not in request.files:
         return jsonify({"error": "No file part"}), 400
 
@@ -87,16 +89,20 @@ def predict():
     
     image = Image.open(io.BytesIO(file.read()))
     predicted_class = analyze_image(image)
-    print(predicted_class)
-    
+    return jsonify({"predicted_class": predicted_class}), 200
+
+@app.route("/get_info", methods=["POST"])
+def get_info():
+    data = request.get_json()
+    if not data or "predicted_class" not in data:
+        return jsonify({"error": "Missing predicted_class"}), 400
+
+    predicted_class = data["predicted_class"]
     search_query = re.sub(r'^(a|an)\s+', '', predicted_class, flags=re.IGNORECASE)
     nutrition_info = get_nutrition_info(predicted_class)
     
-    print(nutrition_info)
-     
     regex = re.compile(re.escape(search_query), re.IGNORECASE)
-    
-    # Obtener datos de la API mealdb_search_url con manejo de errores
+        
     mealdb_search_url = f"https://www.themealdb.com/api/json/v1/1/search.php?s={search_query}"
     try:
         search_response = requests.get(mealdb_search_url)
@@ -110,13 +116,31 @@ def predict():
         mealdb_search_data = {"error": str(e)}
         filtered_search = "none"
 
-   
-
     return jsonify({
-        "predicted_class": predicted_class,
         "nutrition_info": nutrition_info,
         "mealdb_search": filtered_search
     }), 200
+
+@app.route("/add_food", methods=["POST"])
+def add_food():
+    data = request.get_json()
+    new_food = data.get("food", "").strip().lower()
+
+    if not new_food:
+        return jsonify({"error": "El alimento no puede estar vacío"}), 400
+
+    # Cargar la lista de alimentos
+    alimentos = cargar_alimentos()
+
+    # Verificar si el alimento ya existe
+    if f"a {new_food}" in alimentos:
+        return jsonify({"message": "El alimento ya existe"}), 409
+
+    # Agregar el nuevo alimento al archivo
+    with open("alimentos.txt", "a", encoding="utf-8") as f:
+        f.write(f"\n{new_food}")
+
+    return jsonify({"message": f"'{new_food}' agregado correctamente"}), 201
 
 
 

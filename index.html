@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Capturar y Enviar Imagen</title>
+</head>
+<body>
+    <video id="video" width="640" height="480" autoplay></video>
+    <canvas id="canvas" style="display: none;"></canvas>
+    <button id="capture-btn">Capturar y Analizar</button>
+    <button id="info-btn" disabled>Obtener Información</button>
+    <div id="result"></div>
+
+    <script>
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
+        const captureBtn = document.getElementById("capture-btn");
+        const infoBtn = document.getElementById("info-btn");
+        const resultDiv = document.getElementById("result");
+        let predictedClass = null;
+
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(error => {
+                console.error("Error al acceder a la cámara:", error);
+            });
+
+        captureBtn.addEventListener("click", () => {
+            captureBtn.disabled = true;
+            resultDiv.innerHTML = "<p>Analizando imagen...</p>";
+
+            setTimeout(() => {
+                const context = canvas.getContext("2d");
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                canvas.toBlob(blob => {
+                    const formData = new FormData();
+                    formData.append("file", blob, "captured_image.jpg");
+
+                    fetch("http://127.0.0.1:5000/analyze_image", {
+                        method: "POST",
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.predicted_class) {
+                            predictedClass = data.predicted_class;
+                            resultDiv.innerHTML = `<p>Clase predicha: <strong>${predictedClass}</strong></p>`;
+                            infoBtn.disabled = false;
+                        } else {
+                            throw new Error("Predicted class not found in response.");
+                        }
+                    })
+                    .catch(error => {
+                        console.error("Error en análisis:", error);
+                        resultDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+                    })
+                    .finally(() => {
+                        captureBtn.disabled = false;
+                    });
+                }, "image/jpeg");
+            }, 2000);
+        });
+
+        infoBtn.addEventListener("click", () => {
+            if (!predictedClass) {
+                resultDiv.innerHTML += `<p style="color: red;">Error: No hay clase predicha.</p>`;
+                return;
+            }
+
+            infoBtn.disabled = true;
+            resultDiv.innerHTML += "<p>Obteniendo información...</p>";
+
+            fetch("http://127.0.0.1:5000/get_info", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ predicted_class: predictedClass })
+            })
+            .then(response => response.json())
+            .then(infoData => {
+                resultDiv.innerHTML += `
+                    <h3>Información Nutricional:</h3>
+                    <pre>${JSON.stringify(infoData.nutrition_info, null, 2)}</pre>
+                    <h3>Recetas Relacionadas:</h3>
+                    <pre>${JSON.stringify(infoData.mealdb_search, null, 2)}</pre>
+                `;
+            })
+            .catch(error => {
+                console.error("Error en la obtención de información:", error);
+                resultDiv.innerHTML += `<p style="color: red;">Error: ${error.message}</p>`;
+            })
+            .finally(() => {
+                infoBtn.disabled = false;
+            });
+        });
+    </script>
+</body>
+</html>

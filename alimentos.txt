@@ -10,3 +10,7 @@ garlic
 chickpea
 nother food
 hamburger
+enchiladas verdes
+soda
+water bottle
+energy drink

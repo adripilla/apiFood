@@ -40,8 +40,8 @@ def analyze_image(image):
     return alimentos[best_match]
 
 # ----- Configuración para FatSecret -----
-FATSECRET_CLIENT_ID = "TU_CONSUMER_KEY"           # Reemplaza con tu Consumer Key
-FATSECRET_CLIENT_SECRET = "TU_CONSUMER_SECRET"       # Reemplaza con tu Consumer Secret
+FATSECRET_CLIENT_ID = " bf05bb842a994833b309068c4f010103"           # Reemplaza con tu Consumer Key
+FATSECRET_CLIENT_SECRET = "b6841cbe07b04e10947e499c5e0a3fce"       # Reemplaza con tu Consumer Secret
 FATSECRET_TOKEN_URL = "https://platform.fatsecret.com/oauth/token"
 
 def get_fatsecret_access_token():

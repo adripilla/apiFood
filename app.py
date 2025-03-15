@@ -40,8 +40,8 @@ def analyze_image(image):
     return alimentos[best_match]
 
 # ----- Configuración para FatSecret -----
-FATSECRET_CLIENT_ID = " bf05bb842a994833b309068c4f010103"           # Reemplaza con tu Consumer Key
-FATSECRET_CLIENT_SECRET = "b6841cbe07b04e10947e499c5e0a3fce"       # Reemplaza con tu Consumer Secret
+FATSECRET_CLIENT_ID = "bf05bb842a994833b309068c4f010103"  # Reemplaza con tu Consumer Key
+FATSECRET_CLIENT_SECRET = "b6841cbe07b04e10947e499c5e0a3fce"  # Reemplaza con tu Consumer Secret
 FATSECRET_TOKEN_URL = "https://platform.fatsecret.com/oauth/token"
 
 def get_fatsecret_access_token():
@@ -69,7 +69,10 @@ def get_nutrition_info_fatsecret(food_name):
     }
     response = requests.get(url, headers=headers, params=params)
     if response.status_code == 200:
-        return response.json()
+        try:
+            return response.json()
+        except Exception as e:
+            return {"error": "Error al decodificar JSON", "details": str(e)}
     else:
         return {"error": "Error al obtener información nutricional", "details": response.text}
 

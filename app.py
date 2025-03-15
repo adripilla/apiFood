@@ -6,6 +6,7 @@ import io
 import os
 import requests
 from flask_cors import CORS
+from requests_oauthlib import OAuth1
 
 app = Flask(__name__)
 CORS(app)
@@ -39,44 +40,23 @@ def analyze_image(image):
     best_match = torch.argmax(similarity).item()
     return alimentos[best_match]
 
-# ----- Configuración para FatSecret -----
+# ----- Configuración para FatSecret con OAuth 1.0 -----
 FATSECRET_CLIENT_ID = "bf05bb842a994833b309068c4f010103"  # Reemplaza con tu Consumer Key
 FATSECRET_CLIENT_SECRET = "99b020f56caf4e2aabfc7437bbe5ed8f"  # Reemplaza con tu Consumer Secret
-FATSECRET_TOKEN_URL = "https://platform.fatsecret.com/oauth/token"
-
-def get_fatsecret_access_token():
-    payload = {'grant_type': 'client_credentials'}
-    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-    response = requests.post(FATSECRET_TOKEN_URL, data=payload, headers=headers, auth=(FATSECRET_CLIENT_ID, FATSECRET_CLIENT_SECRET))
-    
-    print("Status code:", response.status_code)
-    print("Response text:", response.text)
-    
-    if response.status_code == 200:
-        try:
-            return response.json().get("access_token")
-        except Exception as e:
-            print("Error al decodificar JSON:", e)
-            return None
-    else:
-        print("Error al obtener token de FatSecret:", response.text)
-        return None
 
 def get_nutrition_info_fatsecret(food_name):
-    access_token = get_fatsecret_access_token()
-    if not access_token:
-        return {"error": "No se pudo obtener token de acceso de FatSecret"}
-    
     url = "https://platform.fatsecret.com/rest/server.api"
     params = {
         "method": "food.search",
         "search_expression": food_name,
         "format": "json"
     }
-    headers = {
-        "Authorization": f"Bearer {access_token}"
-    }
-    response = requests.get(url, headers=headers, params=params)
+    # Se utiliza OAuth1 para firmar la solicitud
+    auth = OAuth1(FATSECRET_CLIENT_ID,
+                  client_secret=FATSECRET_CLIENT_SECRET,
+                  signature_method='HMAC-SHA1',
+                  signature_type='auth_header')
+    response = requests.get(url, params=params, auth=auth)
     if response.status_code == 200:
         try:
             return response.json()
@@ -115,7 +95,7 @@ def predict_nutrition():
     image = Image.open(io.BytesIO(file.read()))
     predicted_class = analyze_image(image)
     
-    # Usa la API de FatSecret para obtener información nutricional
+    # Usa la API de FatSecret (OAuth1) para obtener información nutricional
     nutrition_info = get_nutrition_info_fatsecret(predicted_class)
     
     return jsonify({

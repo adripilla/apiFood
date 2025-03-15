@@ -51,11 +51,13 @@ def get_nutrition_info_fatsecret(food_name):
         "search_expression": food_name,
         "format": "json"
     }
-    # Se utiliza OAuth1 para firmar la solicitud
-    auth = OAuth1(FATSECRET_CLIENT_ID,
-                  client_secret=FATSECRET_CLIENT_SECRET,
-                  signature_method='HMAC-SHA1',
-                  signature_type='auth_header')
+    # Configuración de OAuth1 sin parámetros adicionales extra
+    auth = OAuth1(
+        client_key=FATSECRET_CLIENT_ID,
+        client_secret=FATSECRET_CLIENT_SECRET,
+        signature_method='HMAC-SHA1',
+        signature_type='AUTH_HEADER'
+    )
     response = requests.get(url, params=params, auth=auth)
     if response.status_code == 200:
         try:

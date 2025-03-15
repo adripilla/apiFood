@@ -46,9 +46,18 @@ FATSECRET_TOKEN_URL = "https://platform.fatsecret.com/oauth/token"
 
 def get_fatsecret_access_token():
     payload = {'grant_type': 'client_credentials'}
-    response = requests.post(FATSECRET_TOKEN_URL, data=payload, auth=(FATSECRET_CLIENT_ID, FATSECRET_CLIENT_SECRET))
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+    response = requests.post(FATSECRET_TOKEN_URL, data=payload, headers=headers, auth=(FATSECRET_CLIENT_ID, FATSECRET_CLIENT_SECRET))
+    
+    print("Status code:", response.status_code)
+    print("Response text:", response.text)
+    
     if response.status_code == 200:
-        return response.json().get("access_token")
+        try:
+            return response.json().get("access_token")
+        except Exception as e:
+            print("Error al decodificar JSON:", e)
+            return None
     else:
         print("Error al obtener token de FatSecret:", response.text)
         return None

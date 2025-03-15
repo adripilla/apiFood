@@ -41,6 +41,7 @@ def analyze_image(image):
 
 @app.route("/analyze_image", methods=["POST"])
 def analyze_image_endpoint():
+    print("analyze")
     if "file" not in request.files:
         return jsonify({"error": "No file part"}), 400
 
@@ -50,6 +51,7 @@ def analyze_image_endpoint():
     
     image = Image.open(io.BytesIO(file.read()))
     predicted_class = analyze_image(image)
+    print("funciona")
     return jsonify({"predicted_class": predicted_class}), 200
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ import torch
 import clip
 import io
 import os
+import requests
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -27,18 +28,52 @@ alimentos = cargar_alimentos()
 def analyze_image(image):
     image_input = preprocess(image).unsqueeze(0).to(device)
     text_inputs = torch.cat([clip.tokenize(text) for text in alimentos]).to(device)
-
+    
     with torch.no_grad():
         image_features = model.encode_image(image_input)
         text_features = model.encode_text(text_inputs)
-
+    
     image_features /= image_features.norm(dim=-1, keepdim=True)
     text_features /= text_features.norm(dim=-1, keepdim=True)
     similarity = (image_features @ text_features.T).squeeze(0)
-
     best_match = torch.argmax(similarity).item()
     return alimentos[best_match]
 
+# ----- Configuración para FatSecret -----
+FATSECRET_CLIENT_ID = "TU_CONSUMER_KEY"           # Reemplaza con tu Consumer Key
+FATSECRET_CLIENT_SECRET = "TU_CONSUMER_SECRET"       # Reemplaza con tu Consumer Secret
+FATSECRET_TOKEN_URL = "https://platform.fatsecret.com/oauth/token"
+
+def get_fatsecret_access_token():
+    payload = {'grant_type': 'client_credentials'}
+    response = requests.post(FATSECRET_TOKEN_URL, data=payload, auth=(FATSECRET_CLIENT_ID, FATSECRET_CLIENT_SECRET))
+    if response.status_code == 200:
+        return response.json().get("access_token")
+    else:
+        print("Error al obtener token de FatSecret:", response.text)
+        return None
+
+def get_nutrition_info_fatsecret(food_name):
+    access_token = get_fatsecret_access_token()
+    if not access_token:
+        return {"error": "No se pudo obtener token de acceso de FatSecret"}
+    
+    url = "https://platform.fatsecret.com/rest/server.api"
+    params = {
+        "method": "food.search",
+        "search_expression": food_name,
+        "format": "json"
+    }
+    headers = {
+        "Authorization": f"Bearer {access_token}"
+    }
+    response = requests.get(url, headers=headers, params=params)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return {"error": "Error al obtener información nutricional", "details": response.text}
+
+# ----- Endpoint para analizar imagen usando CLIP -----
 @app.route("/analyze_image", methods=["POST"])
 def analyze_image_endpoint():
     print("analyze")
@@ -53,6 +88,28 @@ def analyze_image_endpoint():
     predicted_class = analyze_image(image)
     print("funciona")
     return jsonify({"predicted_class": predicted_class}), 200
+
+# ----- Nuevo endpoint que integra la API de FatSecret -----
+@app.route("/predict_nutrition", methods=["POST"])
+def predict_nutrition():
+    if "file" not in request.files:
+        return jsonify({"error": "No file part"}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
+
+    # Analiza la imagen para determinar el alimento
+    image = Image.open(io.BytesIO(file.read()))
+    predicted_class = analyze_image(image)
+    
+    # Usa la API de FatSecret para obtener información nutricional
+    nutrition_info = get_nutrition_info_fatsecret(predicted_class)
+    
+    return jsonify({
+        "predicted_class": predicted_class,
+        "nutrition_info": nutrition_info
+    }), 200
 
 if __name__ == "__main__":
     # Configuración para producción en la nube

@@ -1,0 +1,16 @@
+pizza
+apple
+avocado
+banana
+carrot
+broccoli
+cucumber
+tomato
+garlic
+chickpea
+nother food
+hamburger
+enchiladas verdes
+soda
+water bottle
+energy drink

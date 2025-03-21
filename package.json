@@ -1,0 +1,31 @@
+{
+  "name": "apifoodjs",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@tensorflow-models/mobilenet": "^2.1.1",
+    "@tensorflow/tfjs": "^4.22.0",
+    "axios": "^1.8.4",
+    "canvas": "^3.1.0",
+    "cheerio": "^1.0.0",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.4.7",
+    "duckduckgo-images-api": "^1.0.5",
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.2",
+    "oauth-1.0a": "^2.2.6",
+    "onnxruntime-node": "^1.21.0",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}

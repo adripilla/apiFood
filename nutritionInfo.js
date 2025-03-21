@@ -80,7 +80,7 @@ const getNutritionInfoFatSecret = async (foodName) => {
     return nutritionDetails;
 
   } catch (error) {
-    console.error("❌ Error al obtener información nutricional:", error.response?.data || error.message);
+    console.error("❌ Error al obtener información nutricional:", error.response);
     return { error: "Error fetching nutrition data" };
   }
 };

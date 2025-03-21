@@ -46,7 +46,10 @@ const analyzeImage = async (imagePath) => {
     });
 
     // Filtrar resultados y devolver el de mayor probabilidad
-    return food ? food : "No match found";
+    if(food)
+        return food;
+    else    
+        return "No match found";
   } catch (error) {
     console.error("❌ Error al procesar la imagen:", error);
     return null;
